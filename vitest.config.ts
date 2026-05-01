@@ -3,6 +3,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    passWithNoTests: true,
     setupFiles: ['reflect-metadata'],
     coverage: { provider: 'v8', reporter: ['text', 'lcov'], thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 } },
     include: ['tests/**/*.test.ts'],
