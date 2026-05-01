@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-05-01T18:17:03.052Z",
+  "projectRoot": "/home/terminal_nomad/Work/Chatblix/meta_sdk",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1777659423052
+}
