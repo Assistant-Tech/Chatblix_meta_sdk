@@ -99,7 +99,14 @@ export class HttpClient {
       });
       return { kind: 'response', response: { status: res.status, headers, bodyText } };
     } catch (e) {
-      this.logger.warn('http_network_error', { url, message: (e as Error).message });
+      let safeUrl = url;
+      try {
+        const u = new URL(url);
+        safeUrl = `${u.origin}${u.pathname}`;
+      } catch {
+        // url not parseable; fall back to raw
+      }
+      this.logger.warn('http_network_error', { url: safeUrl, message: (e as Error).message });
       return { kind: 'network-error', error: new MetaNetworkError((e as Error).message, e) };
     } finally {
       clearTimeout(timer);
@@ -131,12 +138,14 @@ export class HttpClient {
         fbtrace_id: '',
       };
     }
-    const e = fromGraphApiError(payload, response.status);
-    if (e instanceof MetaRateLimitError) {
+    const apiError = fromGraphApiError(payload, response.status);
+    if (apiError instanceof MetaRateLimitError) {
       const ra = response.headers['retry-after'];
-      if (ra) e.retryAfterSeconds = Number(ra);
+      if (ra) {
+        return new MetaRateLimitError(apiError.graphError, apiError.statusCode, Number(ra));
+      }
     }
-    return e;
+    return apiError;
   }
 
   private backoff(attempt: number, overrideSeconds?: number): Promise<void> {

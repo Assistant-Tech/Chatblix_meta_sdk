@@ -29,6 +29,7 @@ export type { Result, Ok, Err } from './core/result';
 
 // OAuth
 export { FacebookOAuthClient } from './oauth/facebook-oauth.client';
+export type { DebugTokenResult } from './oauth/facebook-oauth.client';
 export { InstagramOAuthClient } from './oauth/instagram-oauth.client';
 export { FACEBOOK_SCOPES, INSTAGRAM_SCOPES } from './oauth/scopes';
 export type { FacebookScope, InstagramScope } from './oauth/scopes';

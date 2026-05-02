@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { Result, ok, err } from '../core/result';
-import { MetaError, MetaValidationError } from '../core/errors';
+import { Result, err } from '../core/result';
+import { MetaError } from '../core/errors';
+import { parseSchema, zodIssuesToValidationError } from '../core/schema';
 import { HttpClient } from '../core/http-client.service';
 import type { ResolvedMetaSdkConfig } from '../core/config';
 import { META_GRAPH_API_BASE, INSTAGRAM_GRAPH_API_BASE } from '../core/constants';
@@ -23,6 +24,10 @@ export type IgUserProfileInput =
   | { mode: 'instagram-login'; userId: string; accessToken: string }
   | { mode: 'facebook-login'; userId: string; accessToken: string };
 
+export type IgSendTypingInput =
+  | { mode: 'instagram-login'; igUserId: string; accessToken: string; recipientId: string; action: SenderAction }
+  | { mode: 'facebook-login'; accessToken: string; recipientId: string; action: SenderAction };
+
 const IgUserProfileSchema = z.object({
   id: z.string(), username: z.string().optional(),
   name: z.string().optional(), profile_pic: z.string().optional(),
@@ -43,7 +48,7 @@ export class InstagramMessagingClient {
 
   async sendMessage(input: IgSendMessageInput): Promise<Result<SendMessageResult, MetaError>> {
     const validated = SendMessageRequestSchema.safeParse(input.request);
-    if (!validated.success) return err(toValidation(validated.error));
+    if (!validated.success) return err(zodIssuesToValidationError('Invalid send-message request', validated.error));
     const url = input.mode === 'instagram-login'
       ? `${this.igBase}/${input.igUserId}/messages`
       : `${this.fbBase}/me/messages`;
@@ -54,12 +59,20 @@ export class InstagramMessagingClient {
     return parseSchema(SendMessageResponseSchema, r.value, (raw) => ({ recipientId: raw.recipient_id, messageId: raw.message_id }));
   }
 
-  sendTypingIndicator(input: { mode: IgAuthMode; accessToken: string; recipientId: string; action: SenderAction; igUserId?: string }): Promise<Result<SendMessageResult, MetaError>> {
+  sendTypingIndicator(input: IgSendTypingInput): Promise<Result<SendMessageResult, MetaError>> {
     if (input.mode === 'instagram-login') {
-      if (!input.igUserId) return Promise.resolve(err(new MetaValidationError('igUserId required for instagram-login mode', [])));
-      return this.sendMessage({ mode: 'instagram-login', igUserId: input.igUserId, accessToken: input.accessToken, request: { recipientId: input.recipientId, senderAction: input.action } });
+      return this.sendMessage({
+        mode: 'instagram-login',
+        igUserId: input.igUserId,
+        accessToken: input.accessToken,
+        request: { recipientId: input.recipientId, senderAction: input.action },
+      });
     }
-    return this.sendMessage({ mode: 'facebook-login', accessToken: input.accessToken, request: { recipientId: input.recipientId, senderAction: input.action } });
+    return this.sendMessage({
+      mode: 'facebook-login',
+      accessToken: input.accessToken,
+      request: { recipientId: input.recipientId, senderAction: input.action },
+    });
   }
 
   async listConversations(input: IgListConversationsInput): Promise<Result<{ data: Array<{ id: string; updatedTime?: string }> }, MetaError>> {
@@ -106,12 +119,4 @@ function buildBody(req: SendMessageRequest): Record<string, unknown> {
   if (req.messagingType) out.messaging_type = req.messagingType;
   if (req.tag) out.tag = req.tag;
   return out;
-}
-function toValidation(e: z.ZodError): MetaValidationError {
-  return new MetaValidationError('Invalid send-message request', e.issues.map((i) => ({ path: [...i.path], message: i.message })));
-}
-function parseSchema<S extends z.ZodTypeAny, O>(schema: S, value: unknown, transform: (raw: z.infer<S>) => O): Result<O, MetaError> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) return err(new MetaValidationError('Response validation failed', parsed.error.issues.map((i) => ({ path: [...i.path], message: i.message }))));
-  return ok(transform(parsed.data));
 }

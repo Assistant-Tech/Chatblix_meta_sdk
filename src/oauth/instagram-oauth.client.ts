@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { Result, ok, err } from '../core/result';
-import { MetaError, MetaValidationError, type ValidationIssue } from '../core/errors';
+import { Result } from '../core/result';
+import { MetaError, MetaConfigError } from '../core/errors';
+import { parseSchema } from '../core/schema';
 import { HttpClient } from '../core/http-client.service';
 import { INSTAGRAM_OAUTH_DIALOG, INSTAGRAM_AUTH_API, INSTAGRAM_GRAPH_API_BASE } from '../core/constants';
 import { INSTAGRAM_OAUTH_OPTIONS } from '../meta-sdk.constants';
@@ -21,7 +22,13 @@ export class InstagramOAuthClient {
   constructor(
     @Inject(HttpClient) private readonly http: HttpClient,
     @Inject(INSTAGRAM_OAUTH_OPTIONS) private readonly opts: InstagramOAuthOptions,
-  ) {}
+  ) {
+    if (!opts) {
+      throw new MetaConfigError(
+        'InstagramOAuthClient requires instagram options — pass `instagram` to MetaSdkModule.forRoot/forRootAsync',
+      );
+    }
+  }
 
   buildAuthUrl(input: BuildAuthUrlInput): string {
     const scopes = (input.scopes ?? this.opts.scopes ?? INSTAGRAM_SCOPES).join(',');
@@ -107,18 +114,3 @@ export class InstagramOAuthClient {
   }
 }
 
-function parseSchema<S extends z.ZodTypeAny, O>(
-  schema: S,
-  value: unknown,
-  transform: (raw: z.infer<S>) => O,
-): Result<O, MetaError> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    const issues: ValidationIssue[] = parsed.error.issues.map((i) => ({
-      path: [...i.path],
-      message: i.message,
-    }));
-    return err(new MetaValidationError('Response validation failed', issues));
-  }
-  return ok(transform(parsed.data as z.infer<S>));
-}

@@ -36,6 +36,8 @@ describe('MetaSdkModule', () => {
       imports: [MetaSdkModule.forRootAsync({
         useFactory: () => ({
           facebook: { clientId: 'aa', clientSecret: 'bb', redirectUri: 'https://cc' },
+          instagram: { clientId: 'dd', clientSecret: 'ee', redirectUri: 'https://ff' },
+          webhook: { appSecret: 'sec', verifyToken: 'vt' },
         }),
       })],
     }).compile();

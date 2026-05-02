@@ -44,7 +44,11 @@ export class MetaAuthError extends MetaApiError {
 
 export class MetaRateLimitError extends MetaApiError {
   override readonly kind = 'rate_limit' as const;
-  retryAfterSeconds: number | undefined;
+  readonly retryAfterSeconds: number | undefined;
+  constructor(graphError: GraphApiErrorPayload, statusCode: number, retryAfterSeconds?: number) {
+    super(graphError, statusCode);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
 }
 
 export class MetaNetworkError extends MetaError {

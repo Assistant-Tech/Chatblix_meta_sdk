@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { Result, ok, err } from '../core/result';
-import { MetaError, MetaValidationError } from '../core/errors';
+import { Result, err } from '../core/result';
+import { MetaError } from '../core/errors';
+import { parseSchema, zodIssuesToValidationError } from '../core/schema';
 import { HttpClient } from '../core/http-client.service';
 import type { ResolvedMetaSdkConfig } from '../core/config';
 import { META_GRAPH_API_BASE } from '../core/constants';
@@ -50,7 +51,7 @@ export class MessengerClient {
 
   async sendMessage(input: SendMessageInput): Promise<Result<SendMessageResult, MetaError>> {
     const validated = SendMessageRequestSchema.safeParse(input.request);
-    if (!validated.success) return err(toValidation(validated.error));
+    if (!validated.success) return err(zodIssuesToValidationError('Invalid send-message request', validated.error));
     const r = await this.http.request<unknown>({
       method: 'POST', url: `${this.base}/${input.pageId}/messages`,
       query: { access_token: input.accessToken },
@@ -124,12 +125,4 @@ function buildBody(req: SendMessageRequest): Record<string, unknown> {
   if (req.messagingType) out.messaging_type = req.messagingType;
   if (req.tag) out.tag = req.tag;
   return out;
-}
-function toValidation(e: z.ZodError): MetaValidationError {
-  return new MetaValidationError('Invalid send-message request', e.issues.map((i) => ({ path: [...i.path], message: i.message })));
-}
-function parseSchema<S extends z.ZodTypeAny, O>(schema: S, value: unknown, transform: (raw: z.infer<S>) => O): Result<O, MetaError> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) return err(new MetaValidationError('Response validation failed', parsed.error.issues.map((i) => ({ path: [...i.path], message: i.message }))));
-  return ok(transform(parsed.data));
 }

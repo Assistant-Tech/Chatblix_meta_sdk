@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { Result, ok, err } from '../core/result';
-import { MetaError, MetaValidationError, type ValidationIssue } from '../core/errors';
+import { Result, ok } from '../core/result';
+import { MetaError, MetaConfigError } from '../core/errors';
+import { parseSchema } from '../core/schema';
 import { HttpClient } from '../core/http-client.service';
 import type { ResolvedMetaSdkConfig } from '../core/config';
 import { META_GRAPH_API_BASE, FACEBOOK_OAUTH_DIALOG } from '../core/constants';
@@ -40,6 +41,11 @@ export class FacebookOAuthClient {
     @Inject(META_SDK_RESOLVED_CONFIG) cfg: ResolvedMetaSdkConfig,
     @Inject(FACEBOOK_OAUTH_OPTIONS) private readonly opts: FacebookOAuthOptions,
   ) {
+    if (!opts) {
+      throw new MetaConfigError(
+        'FacebookOAuthClient requires facebook options — pass `facebook` to MetaSdkModule.forRoot/forRootAsync',
+      );
+    }
     this.base = `${META_GRAPH_API_BASE}/${cfg.apiVersion}`;
   }
 
@@ -166,18 +172,3 @@ export class FacebookOAuthClient {
   }
 }
 
-function parseSchema<S extends z.ZodTypeAny, O>(
-  schema: S,
-  value: unknown,
-  transform: (raw: z.infer<S>) => O,
-): Result<O, MetaError> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    const issues: ValidationIssue[] = parsed.error.issues.map((i) => ({
-      path: [...i.path],
-      message: i.message,
-    }));
-    return err(new MetaValidationError('Response validation failed', issues));
-  }
-  return ok(transform(parsed.data as z.infer<S>));
-}
