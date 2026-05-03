@@ -54,6 +54,7 @@ export class InstagramMessagingClient {
       : `${this.fbBase}/me/messages`;
     const r = await this.http.request<unknown>({
       method: 'POST', url, query: { access_token: input.accessToken }, body: buildBody(validated.data as SendMessageRequest),
+      platform: 'instagram',
     });
     if (!r.ok) return r;
     return parseSchema(SendMessageResponseSchema, r.value, (raw) => ({ recipientId: raw.recipient_id, messageId: raw.message_id }));
@@ -86,6 +87,7 @@ export class InstagramMessagingClient {
         fields: 'id,updated_time,participants,messages.limit(1){created_time,from,to,message}',
         limit: input.limit, after: input.after, access_token: input.accessToken,
       },
+      platform: 'instagram',
     });
     if (!r.ok) return r;
     return parseSchema(ConvSchema, r.value, (raw) => ({ data: raw.data.map((c) => {
@@ -100,6 +102,7 @@ export class InstagramMessagingClient {
     const fields = input.mode === 'instagram-login' ? 'id,username,name,profile_pic' : 'name,profile_pic';
     const r = await this.http.request<unknown>({
       method: 'GET', url, query: { fields, access_token: input.accessToken },
+      platform: 'instagram',
     });
     if (!r.ok) return r;
     return parseSchema(IgUserProfileSchema, r.value, (raw) => {

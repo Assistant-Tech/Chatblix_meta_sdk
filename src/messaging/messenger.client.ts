@@ -56,6 +56,7 @@ export class MessengerClient {
       method: 'POST', url: `${this.base}/${input.pageId}/messages`,
       query: { access_token: input.accessToken },
       body: buildBody(validated.data as SendMessageRequest),
+      platform: 'messenger',
     });
     if (!r.ok) return r;
     return parseSchema(SendMessageResponseSchema, r.value, (raw) => ({ recipientId: raw.recipient_id, messageId: raw.message_id }));
@@ -76,6 +77,7 @@ export class MessengerClient {
         fields: 'id,updated_time,link,participants,messages.limit(1){created_time,from,to,message}',
         limit: input.limit, after: input.after, access_token: input.accessToken,
       },
+      platform: 'messenger',
     });
     if (!r.ok) return r;
     return parseSchema(ConvSchema, r.value, (raw) => ({ data: raw.data.map((c) => {
@@ -89,6 +91,7 @@ export class MessengerClient {
     const r = await this.http.request<unknown>({
       method: 'GET', url: `${this.base}/${input.conversationId}/messages`,
       query: { fields: 'id,message,from,to,created_time', access_token: input.accessToken },
+      platform: 'messenger',
     });
     if (!r.ok) return r;
     return parseSchema(ConvMsgsSchema, r.value, (raw) => ({
@@ -105,6 +108,7 @@ export class MessengerClient {
     const r = await this.http.request<unknown>({
       method: 'GET', url: `${this.base}/${input.userId}`,
       query: { fields: 'first_name,last_name,profile_pic,email', access_token: input.accessToken },
+      platform: 'messenger',
     });
     if (!r.ok) return r;
     return parseSchema(UserProfileSchema, r.value, (raw) => {

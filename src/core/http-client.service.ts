@@ -8,6 +8,7 @@ import {
   fromGraphApiError,
   type GraphApiErrorPayload,
 } from './errors';
+import type { MetaPlatformHint } from './error-codes';
 import type { ResolvedMetaSdkConfig } from './config';
 import type { HttpRequest, RawHttpResponse } from './http-client.types';
 import type { SdkLogger } from './logger.token';
@@ -54,7 +55,7 @@ export class HttpClient {
         return this.parseJson<T>(response);
       }
 
-      const apiError = this.parseGraphError(response);
+      const apiError = this.parseGraphError(response, req.platform);
       if (apiError instanceof MetaRateLimitError && attempt < this.cfg.maxRetries) {
         await this.backoff(attempt, apiError.retryAfterSeconds);
         attempt++;
@@ -122,7 +123,7 @@ export class HttpClient {
     }
   }
 
-  private parseGraphError(response: RawHttpResponse): MetaApiError {
+  private parseGraphError(response: RawHttpResponse, platform?: MetaPlatformHint): MetaApiError {
     let payload: GraphApiErrorPayload | undefined;
     try {
       const parsed = JSON.parse(response.bodyText) as { error?: GraphApiErrorPayload };
@@ -138,7 +139,7 @@ export class HttpClient {
         fbtrace_id: '',
       };
     }
-    const apiError = fromGraphApiError(payload, response.status);
+    const apiError = fromGraphApiError(payload, response.status, platform);
     if (apiError instanceof MetaRateLimitError) {
       const ra = response.headers['retry-after'];
       if (ra) {
