@@ -1,16 +1,24 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { z } from 'zod';
-import { Result } from '../core/result';
-import { MetaError, MetaConfigError } from '../core/errors';
-import { parseSchema } from '../core/schema';
-import { HttpClient } from '../core/http-client.service';
-import { INSTAGRAM_OAUTH_DIALOG, INSTAGRAM_AUTH_API, INSTAGRAM_GRAPH_API_BASE } from '../core/constants';
-import { INSTAGRAM_OAUTH_OPTIONS } from '../meta-sdk.constants';
-import { INSTAGRAM_SCOPES } from './scopes';
-import { LongLivedTokenSchema, InstagramAccountSchema } from './oauth.schemas';
+import { Inject, Injectable } from "@nestjs/common";
+import { z } from "zod";
+import { Result } from "../core/result";
+import { MetaError, MetaConfigError } from "../core/errors";
+import { parseSchema } from "../core/schema";
+import { HttpClient } from "../core/http-client.service";
+import {
+  INSTAGRAM_OAUTH_DIALOG,
+  INSTAGRAM_AUTH_API,
+  INSTAGRAM_GRAPH_API_BASE,
+} from "../core/constants";
+import { INSTAGRAM_OAUTH_OPTIONS } from "../meta-sdk.constants";
+import { INSTAGRAM_SCOPES } from "./scopes";
+import { LongLivedTokenSchema, InstagramAccountSchema } from "./oauth.schemas";
 import type {
-  InstagramOAuthOptions, BuildAuthUrlInput, ShortLivedToken, LongLivedToken, InstagramAccount,
-} from './oauth.types';
+  InstagramOAuthOptions,
+  BuildAuthUrlInput,
+  ShortLivedToken,
+  LongLivedToken,
+  InstagramAccount,
+} from "./oauth.types";
 
 const IgShortLivedSchema = z.object({
   access_token: z.string().min(1),
@@ -21,55 +29,65 @@ const IgShortLivedSchema = z.object({
 export class InstagramOAuthClient {
   constructor(
     @Inject(HttpClient) private readonly http: HttpClient,
-    @Inject(INSTAGRAM_OAUTH_OPTIONS) private readonly opts: InstagramOAuthOptions,
+    @Inject(INSTAGRAM_OAUTH_OPTIONS)
+    private readonly opts: InstagramOAuthOptions,
   ) {
     if (!opts) {
       throw new MetaConfigError(
-        'InstagramOAuthClient requires instagram options — pass `instagram` to MetaSdkModule.forRoot/forRootAsync',
+        "InstagramOAuthClient requires instagram options — pass `instagram` to MetaSdkModule.forRoot/forRootAsync",
       );
     }
   }
 
   buildAuthUrl(input: BuildAuthUrlInput): string {
-    const scopes = (input.scopes ?? this.opts.scopes ?? INSTAGRAM_SCOPES).join(',');
+    const scopes = (input.scopes ?? this.opts.scopes ?? INSTAGRAM_SCOPES).join(
+      ",",
+    );
     const params = new URLSearchParams({
       client_id: this.opts.clientId,
       redirect_uri: this.opts.redirectUri,
       scope: scopes,
-      response_type: 'code',
+      response_type: "code",
       state: input.state,
     });
     return `${INSTAGRAM_OAUTH_DIALOG}?${params.toString()}`;
   }
 
-  async exchangeCodeForToken(code: string): Promise<Result<ShortLivedToken, MetaError>> {
+  async exchangeCodeForToken(
+    code: string,
+  ): Promise<Result<ShortLivedToken, MetaError>> {
     const form = new URLSearchParams({
       client_id: this.opts.clientId,
       client_secret: this.opts.clientSecret,
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       redirect_uri: this.opts.redirectUri,
       code,
     });
     const r = await this.http.request<unknown>({
-      method: 'POST',
+      method: "POST",
       url: `${INSTAGRAM_AUTH_API}/oauth/access_token`,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form.toString(),
     });
     if (!r.ok) return r;
     return parseSchema(IgShortLivedSchema, r.value, (raw) => {
-      const out: ShortLivedToken = { accessToken: raw.access_token, tokenType: 'bearer' };
+      const out: ShortLivedToken = {
+        accessToken: raw.access_token,
+        tokenType: "bearer",
+      };
       out.userId = String(raw.user_id);
       return out;
     });
   }
 
-  async exchangeForLongLivedToken(shortLivedToken: string): Promise<Result<LongLivedToken, MetaError>> {
+  async exchangeForLongLivedToken(
+    shortLivedToken: string,
+  ): Promise<Result<LongLivedToken, MetaError>> {
     const r = await this.http.request<unknown>({
-      method: 'GET',
+      method: "GET",
       url: `${INSTAGRAM_GRAPH_API_BASE}/access_token`,
       query: {
-        grant_type: 'ig_exchange_token',
+        grant_type: "ig_exchange_token",
         client_secret: this.opts.clientSecret,
         access_token: shortLivedToken,
       },
@@ -82,12 +100,14 @@ export class InstagramOAuthClient {
     }));
   }
 
-  async refreshLongLivedToken(longLivedToken: string): Promise<Result<LongLivedToken, MetaError>> {
+  async refreshLongLivedToken(
+    longLivedToken: string,
+  ): Promise<Result<LongLivedToken, MetaError>> {
     const r = await this.http.request<unknown>({
-      method: 'GET',
+      method: "GET",
       url: `${INSTAGRAM_GRAPH_API_BASE}/refresh_access_token`,
       query: {
-        grant_type: 'ig_refresh_token',
+        grant_type: "ig_refresh_token",
         access_token: longLivedToken,
       },
     });
@@ -99,18 +119,27 @@ export class InstagramOAuthClient {
     }));
   }
 
-  async getMe(accessToken: string): Promise<Result<InstagramAccount, MetaError>> {
+  async getMe(
+    accessToken: string,
+  ): Promise<Result<InstagramAccount, MetaError>> {
     const r = await this.http.request<unknown>({
-      method: 'GET',
+      method: "GET",
       url: `${INSTAGRAM_GRAPH_API_BASE}/me`,
-      query: { fields: 'id,username,account_type', access_token: accessToken },
+      query: {
+        fields: "id,username,account_type,user_id",
+        access_token: accessToken,
+      },
     });
     if (!r.ok) return r;
     return parseSchema(InstagramAccountSchema, r.value, (raw) => {
-      const out: InstagramAccount = { id: raw.id, username: raw.username };
+      const out: InstagramAccount = {
+        id: raw.id,
+        username: raw.username,
+        userId: String(raw.user_id),
+      };
       if (raw.account_type !== undefined) out.accountType = raw.account_type;
+      if (raw.user_id !== undefined) out.userId = String(raw.user_id);
       return out;
     });
   }
 }
-

@@ -20,5 +20,8 @@ export const FacebookPageAccountsResponseSchema = z.object({
   })),
 });
 export const InstagramAccountSchema = z.object({
-  id: z.string(), username: z.string(), account_type: z.string().optional(),
+  id: z.string(),
+  username: z.string(),
+  account_type: z.string().optional(),
+  user_id: z.union([z.string(), z.number()]).optional(),
 });
