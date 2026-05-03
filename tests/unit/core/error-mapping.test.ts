@@ -54,4 +54,10 @@ describe('fromGraphApiError', () => {
     expect(err).toBeInstanceOf(MetaApiError);
     expect(err).not.toBeInstanceOf(MetaMessageError);
   });
+
+  it('does not classify a Messenger-only code as message error when platform=instagram', () => {
+    const err = fromGraphApiError(payload(2018001), 400, 'instagram');
+    expect(err).toBeInstanceOf(MetaApiError);
+    expect(err).not.toBeInstanceOf(MetaMessageError);
+  });
 });
