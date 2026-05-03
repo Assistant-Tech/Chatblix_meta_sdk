@@ -1,4 +1,4 @@
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 // Module
 export { MetaSdkModule } from './meta-sdk.module';
@@ -21,9 +21,15 @@ export type { SdkLogger } from './core/logger.token';
 export { noopLogger } from './core/logger.token';
 export {
   MetaError, MetaApiError, MetaAuthError, MetaRateLimitError,
-  MetaNetworkError, MetaValidationError, MetaConfigError, fromGraphApiError,
+  MetaMessageError, MetaNetworkError, MetaValidationError, MetaConfigError,
+  fromGraphApiError,
 } from './core/errors';
 export type { GraphApiErrorPayload, ValidationIssue } from './core/errors';
+export {
+  AUTH_CODES, RATE_LIMIT_CODES,
+  MESSENGER_MESSAGE_CODES, INSTAGRAM_MESSAGE_CODES,
+} from './core/error-codes';
+export type { MetaPlatformHint } from './core/error-codes';
 export { ok, err, isOk, isErr, mapResult, unwrap } from './core/result';
 export type { Result, Ok, Err } from './core/result';
 

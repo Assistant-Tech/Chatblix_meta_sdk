@@ -1,6 +1,6 @@
 {
   "name": "@chatblix/meta-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NestJS SDK module for Meta (Facebook + Instagram) Graph API",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
