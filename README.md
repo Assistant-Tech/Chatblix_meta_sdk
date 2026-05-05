@@ -1,12 +1,76 @@
 # @chatblix/meta-sdk
 
-NestJS module for Meta (Facebook + Instagram) Graph API.
+A typed, batteries-included **NestJS module** for the Meta (Facebook + Instagram) Graph API. Drop it into a Nest app and get OAuth, Messenger, Instagram DMs, webhook verification, and rich attachments — all backed by `Result<T, MetaError>` instead of thrown exceptions.
+
+> ## ⚠️ Use at your own risk
+>
+> This SDK is provided **as-is, without warranty of any kind**, express or implied. It wraps third-party APIs (Meta / Facebook / Instagram Graph API) whose behavior, rate limits, deprecation timelines, and policies are entirely outside our control and can change without notice.
+>
+> - You are responsible for compliance with Meta's Platform Terms, Developer Policies, and any applicable data-protection laws (GDPR, CCPA, etc.) for traffic that flows through your integration.
+> - You are responsible for safeguarding tokens, app secrets, and user data — this library does not persist or transmit anything beyond the calls you explicitly make.
+> - Audit the source before using in production. Pin the version. Monitor your own logs.
+> - The maintainers accept **no liability** for account suspensions, data loss, downtime, financial loss, or any other damages arising from use of this SDK.
+>
+> By installing this package you agree to the terms in [LICENSE](./LICENSE).
+
+---
+
+## Why this exists
+
+Building Meta integrations directly against the Graph API in Nest projects keeps re-creating the same plumbing:
+
+- **Two separate OAuth flows** (Login with Facebook + Login with Instagram) with different token-exchange shapes.
+- **Webhook signature verification** (`x-hub-signature-256`) that has to read the *raw* body — easy to get wrong.
+- **Inconsistent Meta error envelopes** (auth errors, rate limits, transient network failures) that need to be normalized before app code can branch on them.
+- **Ad-hoc DTOs** for messages, attachments, templates copied between projects.
+- **Page tokens, IGSID/IGBA disambiguation, long-lived token refresh** repeated everywhere.
+
+This SDK collapses all of that into a single Nest module with:
+
+- A thin core (`HttpClient`, `Result`, `MetaError`) so failures are *values*, not exceptions.
+- Validated schemas (zod) at every API boundary.
+- Per-resource clients (`oauth`, `messenger`, `messaging`, `webhooks`) composed into `FacebookService` / `InstagramService`.
+- Helpers for image/video/audio/file/template attachments.
+- A clean extension surface for Comments, Posts, or anything else Meta exposes.
+
+It's the version of "Meta Graph API client" you'd write the third time, packaged so you only write it once.
+
+---
+
+## Who it's for
+
+- Teams building **multi-tenant** Messenger / Instagram bots, CRMs, or inboxes on NestJS.
+- Apps that need both **Facebook Page** messaging *and* **Instagram with Instagram Login** in the same codebase.
+- Anyone who wants `Result`-based error handling instead of `try/catch` around HTTP calls.
+
+If you're not on Nest, this isn't the right package — the public surface is `@Module` + DI tokens.
+
+---
+
+## Features
+
+- Synchronous and async (`forRoot` / `forRootAsync`) module configuration.
+- Login with Facebook + Login with Instagram OAuth (separate clients, separate credentials).
+- Long-lived token exchange/refresh, page listing, page→webhook subscription, token debug.
+- Messenger Send API + Instagram Messaging API (both `instagram-login` and Page-linked modes).
+- Webhook challenge + HMAC-SHA256 signature verification, plus typed event parsing.
+- Attachment + template builders (`imageAttachment`, `genericTemplate`, `buttonTemplate`, …).
+- Result-typed errors with `MetaError.kind`: `api | auth | rate_limit | network | validation | config`.
+- Built-in retry + `retryAfterSeconds` surfaced for rate-limit backoff.
+
+---
 
 ## Install
 
 ```bash
 npm install @chatblix/meta-sdk
+# peer deps (already in most Nest apps)
+npm install @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
+
+Requires **Node ≥ 18.17** and **NestJS 10 or 11**.
+
+---
 
 ## Wire up — synchronous
 
@@ -106,6 +170,8 @@ export class MetaWebhookController {
 }
 ```
 
+> **Note:** the webhook receiver requires the *raw* body. Enable it in `main.ts` with `NestFactory.create(AppModule, { rawBody: true })`.
+
 ## Attachments
 
 ```ts
@@ -163,14 +229,49 @@ Two independent flows are supported — each with its own client and credentials
 
 See `src/extensions/README.md`.
 
+---
+
 ## Development
 
 ```bash
-npm install
+npm install        # installs deps + sets up husky pre-commit hook
 npm run typecheck
 npm test
 npm run build
 ```
+
+### Pre-commit hook (auto version bump)
+
+Husky installs a `pre-commit` hook that:
+
+1. Runs `npm run lint` and `npm run typecheck` on the staged code.
+2. If any **`src/**`** files are staged, auto-bumps the **patch** version in `package.json` (`npm version patch --no-git-tag-version`) and re-stages it.
+
+Skip in emergencies with `git commit --no-verify` (do not skip on shared branches).
+
+To bump a non-patch version manually before commit:
+
+```bash
+npm run release:minor   # 0.2.x → 0.3.0
+npm run release:major   # 0.x.y → 1.0.0
+```
+
+### Publishing to npm
+
+The release scripts run build + tests, bump the version, create a git tag, and publish.
+
+```bash
+npm run release:patch   # 0.2.1 → 0.2.2
+npm run release:minor
+npm run release:major
+```
+
+Under the hood:
+1. `prerelease`: `npm run lint && npm run typecheck && npm test && npm run build`
+2. `npm version <level>` — bumps `package.json` and creates a `vX.Y.Z` tag
+3. `postversion`: `git push && git push --tags && npm publish --access public`
+
+> First-time: run `npm login` once and make sure you have publish rights on the `@chatblix` scope.
 
 ## License
 

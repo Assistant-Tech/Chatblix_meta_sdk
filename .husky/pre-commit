@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+
+# Skip on merge / rebase / amend-only commits where no real source changed.
+if [ -f .git/MERGE_HEAD ] || [ -f .git/REBASE_HEAD ]; then
+  exit 0
+fi
+
+# 1. Quality gates on the whole project (cheap; trips early if broken).
+# Skip lint if no eslint config is present (project hasn't configured one yet).
+if ls .eslintrc* eslint.config.* 2>/dev/null | grep -q .; then
+  npm run lint || exit 1
+fi
+npm run typecheck || exit 1
+
+# 2. Auto-bump patch version when src/ files are staged.
+SRC_STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^src/' || true)
+if [ -n "$SRC_STAGED" ]; then
+  # Skip if package.json itself is already staged (manual version bump in flight).
+  PKG_STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^package\.json$' || true)
+  if [ -z "$PKG_STAGED" ]; then
+    echo "[husky] src/ changed — bumping patch version"
+    npm version patch --no-git-tag-version >/dev/null || exit 1
+    git add package.json
+  else
+    echo "[husky] package.json already staged — skipping auto-bump"
+  fi
+fi

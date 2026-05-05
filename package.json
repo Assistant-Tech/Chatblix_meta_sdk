@@ -12,8 +12,11 @@
       "require": "./dist/index.cjs"
     }
   },
+  "license": "MIT",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",
@@ -23,7 +26,13 @@
     "test:watch": "vitest",
     "lint": "eslint src tests --ext .ts",
     "format": "prettier --write src tests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky || true",
+    "prerelease": "npm run lint && npm run typecheck && npm test && npm run build",
+    "release:patch": "npm run prerelease && npm version patch -m \"chore(release): %s\"",
+    "release:minor": "npm run prerelease && npm version minor -m \"chore(release): %s\"",
+    "release:major": "npm run prerelease && npm version major -m \"chore(release): %s\"",
+    "postversion": "git push && git push --tags && npm publish --access public"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.0.0 || ^11.0.0",
@@ -43,6 +52,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^8.57.1",
+    "husky": "^9.1.7",
     "msw": "^2.14.2",
     "prettier": "^3.8.3",
     "reflect-metadata": "^0.2.2",
