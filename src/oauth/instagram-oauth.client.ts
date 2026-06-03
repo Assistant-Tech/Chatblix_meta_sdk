@@ -1,15 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { Result } from "../core/result";
+import { Result, ok } from "../core/result";
 import { MetaError, MetaConfigError } from "../core/errors";
 import { parseSchema } from "../core/schema";
 import { HttpClient } from "../core/http-client.service";
+import type { ResolvedMetaSdkConfig } from "../core/config";
 import {
   INSTAGRAM_OAUTH_DIALOG,
   INSTAGRAM_AUTH_API,
   INSTAGRAM_GRAPH_API_BASE,
 } from "../core/constants";
-import { INSTAGRAM_OAUTH_OPTIONS } from "../meta-sdk.constants";
+import {
+  INSTAGRAM_OAUTH_OPTIONS,
+  META_SDK_RESOLVED_CONFIG,
+} from "../meta-sdk.constants";
 import { INSTAGRAM_SCOPES } from "./scopes";
 import { LongLivedTokenSchema, InstagramAccountSchema } from "./oauth.schemas";
 import type {
@@ -27,8 +31,10 @@ const IgShortLivedSchema = z.object({
 
 @Injectable()
 export class InstagramOAuthClient {
+  private readonly graphBase: string;
   constructor(
     @Inject(HttpClient) private readonly http: HttpClient,
+    @Inject(META_SDK_RESOLVED_CONFIG) cfg: ResolvedMetaSdkConfig,
     @Inject(INSTAGRAM_OAUTH_OPTIONS)
     private readonly opts: InstagramOAuthOptions,
   ) {
@@ -37,6 +43,7 @@ export class InstagramOAuthClient {
         "InstagramOAuthClient requires instagram options — pass `instagram` to MetaSdkModule.forRoot/forRootAsync",
       );
     }
+    this.graphBase = `${INSTAGRAM_GRAPH_API_BASE}/${cfg.apiVersion}`;
   }
 
   buildAuthUrl(input: BuildAuthUrlInput): string {
@@ -141,5 +148,37 @@ export class InstagramOAuthClient {
       if (raw.user_id !== undefined) out.userId = String(raw.user_id);
       return out;
     });
+  }
+
+  /**
+   * Subscribe the app to webhook notifications for an Instagram professional
+   * account (Instagram API with Instagram Login). Mirrors the Facebook page
+   * `subscribed_apps` edge, but is scoped to the IG user rather than a page.
+   *
+   * @param igUserId IG user ID (IGBA) — use the account's `userId`, or `'me'`.
+   * @param accessToken Long-lived access token for the account.
+   * @param subscribedFields Webhook fields to subscribe to. Defaults to messaging fields.
+   */
+  async subscribePageToWebhooks(
+    igUserId: string,
+    accessToken: string,
+    subscribedFields: readonly string[] = [
+      "messages",
+      "messaging_postbacks",
+      "message_reactions",
+      "message_reads",
+    ],
+  ): Promise<Result<{ success: boolean }, MetaError>> {
+    const r = await this.http.request<{ success?: boolean }>({
+      method: "POST",
+      url: `${this.graphBase}/${igUserId}/subscribed_apps`,
+      body: {
+        subscribed_fields: subscribedFields.join(","),
+        access_token: accessToken,
+      },
+      platform: "instagram",
+    });
+    if (!r.ok) return r;
+    return ok({ success: r.value.success ?? true });
   }
 }

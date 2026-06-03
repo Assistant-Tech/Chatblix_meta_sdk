@@ -91,6 +91,39 @@ describe('InstagramOAuthClient', () => {
     }
   });
 
+  it('subscribePageToWebhooks POSTs subscribed_fields to the IG user subscribed_apps edge', async () => {
+    let url = ''; let body: Record<string, unknown> = {};
+    server.use(http.post('https://graph.instagram.com/v25.0/ig123/subscribed_apps', async ({ request }) => {
+      url = request.url;
+      body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json({ success: true });
+    }));
+    const c = await build();
+    const r = await c.subscribePageToWebhooks('ig123', 'igtok');
+    expect(url).toContain('/v25.0/ig123/subscribed_apps');
+    expect(body['subscribed_fields']).toContain('messages');
+    expect(body['access_token']).toBe('igtok');
+    if (isOk(r)) expect(r.value.success).toBe(true);
+  });
+
+  it('subscribePageToWebhooks honours custom subscribed_fields', async () => {
+    let body: Record<string, unknown> = {};
+    server.use(http.post('https://graph.instagram.com/v25.0/ig123/subscribed_apps', async ({ request }) => {
+      body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json({ success: true });
+    }));
+    const c = await build();
+    await c.subscribePageToWebhooks('ig123', 'igtok', ['comments', 'messages']);
+    expect(body['subscribed_fields']).toBe('comments,messages');
+  });
+
+  it('subscribePageToWebhooks returns Err on failure', async () => {
+    server.use(http.post('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () =>
+      HttpResponse.json({ error: { message: 'nope', code: 100 } }, { status: 400 })));
+    const c = await build();
+    expect(isErr(await c.subscribePageToWebhooks('ig123', 'igtok'))).toBe(true);
+  });
+
   it('returns Err on bad code', async () => {
     server.use(http.post('https://api.instagram.com/oauth/access_token', () =>
       HttpResponse.json({ error_type: 'OAuthException', code: 400, error_message: 'bad' }, { status: 400 })));
