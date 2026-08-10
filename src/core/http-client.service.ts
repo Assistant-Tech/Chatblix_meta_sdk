@@ -56,6 +56,7 @@ export class HttpClient {
       }
 
       const apiError = this.parseGraphError(response, req.platform);
+      this.logGraphError(req, response.status, apiError, attempt);
       if (apiError instanceof MetaRateLimitError && attempt < this.cfg.maxRetries) {
         await this.backoff(attempt, apiError.retryAfterSeconds);
         attempt++;
@@ -71,6 +72,55 @@ export class HttpClient {
       return err(apiError);
     }
     return err(lastError ?? new MetaNetworkError('exhausted retries'));
+  }
+
+  /**
+   * Every Graph API failure passes through here. Until now the SDK returned the
+   * error without logging it, so `error_data`, `error_user_msg` and
+   * `fbtrace_id` only survived if the caller happened to unpack them — and most
+   * callers log `error.message` alone. Logging at the boundary means one place
+   * covers every request the SDK makes.
+   *
+   * The URL is reduced to origin + path: query strings carry access tokens, and
+   * request bodies are never logged for the same reason.
+   */
+  private logGraphError(
+    req: HttpRequest,
+    status: number,
+    error: MetaApiError,
+    attempt: number,
+  ): void {
+    const graph = error.graphError as unknown as Record<string, unknown>;
+    const context: Record<string, unknown> = {
+      operation: `${req.method} ${this.safeUrl(req.url)}`,
+      status,
+      attempt,
+      code: error.code,
+      type: error.type,
+      subcode: error.subcode ?? null,
+      fbTraceId: error.fbTraceId,
+      userTitle: graph['error_user_title'] ?? null,
+      userMessage: graph['error_user_msg'] ?? null,
+      isTransient: graph['is_transient'] === true,
+      details: graph['error_data'] ?? null,
+    };
+    // Meta flagging the call as retryable is the one case that is not yet a
+    // failure worth paging on.
+    if (context['isTransient'] === true) {
+      this.logger.warn('meta_api_error', context);
+    } else {
+      this.logger.error('meta_api_error', context);
+    }
+  }
+
+  /** Strips the query string — it carries access tokens. */
+  private safeUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return url;
+    }
   }
 
   private buildUrl(base: string, query?: HttpRequest['query']): string {
@@ -100,14 +150,7 @@ export class HttpClient {
       });
       return { kind: 'response', response: { status: res.status, headers, bodyText } };
     } catch (e) {
-      let safeUrl = url;
-      try {
-        const u = new URL(url);
-        safeUrl = `${u.origin}${u.pathname}`;
-      } catch {
-        // url not parseable; fall back to raw
-      }
-      this.logger.warn('http_network_error', { url: safeUrl, message: (e as Error).message });
+      this.logger.warn('http_network_error', { url: this.safeUrl(url), message: (e as Error).message });
       return { kind: 'network-error', error: new MetaNetworkError((e as Error).message, e) };
     } finally {
       clearTimeout(timer);

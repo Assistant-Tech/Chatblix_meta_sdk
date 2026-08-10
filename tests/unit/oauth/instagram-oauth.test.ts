@@ -124,6 +124,60 @@ describe('InstagramOAuthClient', () => {
     expect(isErr(await c.subscribePageToWebhooks('ig123', 'igtok'))).toBe(true);
   });
 
+  it('unsubscribePageFromWebhooks DELETEs when a subscription exists', async () => {
+    let deleteUrl = ''; let method = '';
+    server.use(
+      http.get('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () =>
+        HttpResponse.json({ data: [{ id: 'app1', subscribed_fields: ['messages'] }] })),
+      http.delete('https://graph.instagram.com/v25.0/ig123/subscribed_apps', ({ request }) => {
+        deleteUrl = request.url; method = request.method;
+        return HttpResponse.json({ success: true });
+      }),
+    );
+    const c = await build();
+    const r = await c.unsubscribePageFromWebhooks('ig123', 'igtok');
+    expect(method).toBe('DELETE');
+    expect(deleteUrl).toContain('access_token=igtok');
+    if (isOk(r)) {
+      expect(r.value.success).toBe(true);
+      expect(r.value.alreadyUnsubscribed).toBe(false);
+    }
+  });
+
+  it('unsubscribePageFromWebhooks skips the DELETE when nothing is subscribed', async () => {
+    let deleted = false;
+    server.use(
+      http.get('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () =>
+        HttpResponse.json({ data: [] })),
+      http.delete('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () => {
+        deleted = true;
+        return HttpResponse.json({ success: true });
+      }),
+    );
+    const c = await build();
+    const r = await c.unsubscribePageFromWebhooks('ig123', 'igtok');
+    expect(deleted).toBe(false);
+    if (isOk(r)) {
+      expect(r.value.success).toBe(true);
+      expect(r.value.alreadyUnsubscribed).toBe(true);
+    }
+  });
+
+  it('unsubscribePageFromWebhooks returns Err when the lookup fails on a revoked token', async () => {
+    server.use(http.get('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () =>
+      HttpResponse.json({ error: { message: 'Invalid OAuth access token', type: 'OAuthException', code: 190, fbtrace_id: 'T1' } }, { status: 400 })));
+    const c = await build();
+    expect(isErr(await c.unsubscribePageFromWebhooks('ig123', 'revoked'))).toBe(true);
+  });
+
+  it('getSubscribedApps defaults a missing data array to empty', async () => {
+    server.use(http.get('https://graph.instagram.com/v25.0/ig123/subscribed_apps', () =>
+      HttpResponse.json({})));
+    const c = await build();
+    const r = await c.getSubscribedApps('ig123', 'igtok');
+    if (isOk(r)) expect(r.value.data).toEqual([]);
+  });
+
   it('returns Err on bad code', async () => {
     server.use(http.post('https://api.instagram.com/oauth/access_token', () =>
       HttpResponse.json({ error_type: 'OAuthException', code: 400, error_message: 'bad' }, { status: 400 })));

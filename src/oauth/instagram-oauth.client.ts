@@ -22,6 +22,9 @@ import type {
   ShortLivedToken,
   LongLivedToken,
   InstagramAccount,
+  SubscribedApp,
+  SubscribedAppsList,
+  UnsubscribeResult,
 } from "./oauth.types";
 
 const IgShortLivedSchema = z.object({
@@ -180,5 +183,51 @@ export class InstagramOAuthClient {
     });
     if (!r.ok) return r;
     return ok({ success: r.value.success ?? true });
+  }
+
+  /**
+   * Remove this app's webhook subscription from an Instagram account.
+   *
+   * Checks for an existing subscription first and no-ops when there is none,
+   * so it is safe to call in a disconnect flow regardless of the account's
+   * current state. Callers get `alreadyUnsubscribed` to distinguish the two.
+   *
+   * Call this BEFORE discarding the account's access token — once the token is
+   * gone the subscription can only be cleared by the account owner removing
+   * the app from their Instagram settings.
+   */
+  async unsubscribePageFromWebhooks(
+    igUserId: string,
+    accessToken: string,
+  ): Promise<Result<UnsubscribeResult, MetaError>> {
+    const listed = await this.getSubscribedApps(igUserId, accessToken);
+    if (!listed.ok) return listed;
+    if (listed.value.data.length === 0) {
+      return ok({ success: true, alreadyUnsubscribed: true });
+    }
+
+    const r = await this.http.request<{ success?: boolean }>({
+      method: "DELETE",
+      url: `${this.graphBase}/${igUserId}/subscribed_apps`,
+      query: { access_token: accessToken },
+      platform: "instagram",
+    });
+    if (!r.ok) return r;
+    return ok({ success: r.value.success ?? true, alreadyUnsubscribed: false });
+  }
+
+  /** List the apps currently subscribed to this Instagram account's webhooks. */
+  async getSubscribedApps(
+    igUserId: string,
+    accessToken: string,
+  ): Promise<Result<SubscribedAppsList, MetaError>> {
+    const r = await this.http.request<{ data?: SubscribedApp[] }>({
+      method: "GET",
+      url: `${this.graphBase}/${igUserId}/subscribed_apps`,
+      query: { access_token: accessToken },
+      platform: "instagram",
+    });
+    if (!r.ok) return r;
+    return ok({ data: r.value.data ?? [] });
   }
 }

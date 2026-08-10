@@ -6,13 +6,37 @@ import {
   type MetaPlatformHint,
 } from './error-codes';
 
+/**
+ * Meta's error object, verbatim. Optional fields are only present on some
+ * errors; the index signature preserves any field Meta adds later instead of
+ * dropping it on the floor.
+ */
 export interface GraphApiErrorPayload {
   message: string;
   type: string;
   code: number;
   error_subcode?: number;
   subcode?: number;
+  /** Short, user-presentable title — localised by Meta */
+  error_user_title?: string;
+  /** Longer, user-presentable explanation — localised by Meta */
+  error_user_msg?: string;
+  /** Endpoint-specific diagnostic payload; shape varies per error */
+  error_data?: unknown;
+  /** Meta hints the call may succeed if retried */
+  is_transient?: boolean;
   fbtrace_id: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Builds the `Error.message` summary. Meta's developer message stays first so
+ * existing log greps keep working; the user-facing text is appended rather
+ * than substituted.
+ */
+function buildMessage(p: GraphApiErrorPayload): string {
+  const userFacing = [p.error_user_title, p.error_user_msg].filter(Boolean).join(': ');
+  return userFacing ? `${p.message} — ${userFacing}` : p.message;
 }
 
 export interface ValidationIssue {
@@ -41,15 +65,27 @@ export class MetaApiError extends MetaError {
   readonly type: string;
   readonly subcode: number | undefined;
   readonly fbTraceId: string;
+  /** Meta's user-presentable title, when it supplied one */
+  readonly userTitle: string | undefined;
+  /** Meta's user-presentable explanation — the only text safe to show end users */
+  readonly userMessage: string | undefined;
+  /** Endpoint-specific diagnostics (`error_data`); shape varies, treat as opaque */
+  readonly details: unknown;
+  /** Meta hints the call may succeed if retried */
+  readonly isTransient: boolean;
   constructor(
     public readonly graphError: GraphApiErrorPayload,
     public readonly statusCode: number,
   ) {
-    super(graphError.message);
+    super(buildMessage(graphError));
     this.code = graphError.code;
     this.type = graphError.type;
     this.subcode = graphError.error_subcode ?? graphError.subcode;
     this.fbTraceId = graphError.fbtrace_id;
+    this.userTitle = graphError.error_user_title;
+    this.userMessage = graphError.error_user_msg;
+    this.details = graphError.error_data;
+    this.isTransient = graphError.is_transient ?? false;
   }
 }
 

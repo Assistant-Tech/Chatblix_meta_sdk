@@ -91,4 +91,86 @@ describe('HttpClient', () => {
     expect(url).toContain('b=2');
     expect(url).not.toContain('c=');
   });
+
+  describe('Graph error logging', () => {
+    function recordingLogger() {
+      const calls: Array<{ level: string; msg: string; ctx?: Record<string, unknown> }> = [];
+      return {
+        calls,
+        logger: {
+          debug: (msg: string, ctx?: Record<string, unknown>) => calls.push({ level: 'debug', msg, ctx }),
+          info: (msg: string, ctx?: Record<string, unknown>) => calls.push({ level: 'info', msg, ctx }),
+          warn: (msg: string, ctx?: Record<string, unknown>) => calls.push({ level: 'warn', msg, ctx }),
+          error: (msg: string, ctx?: Record<string, unknown>) => calls.push({ level: 'error', msg, ctx }),
+        },
+      };
+    }
+
+    async function buildWith(logger: ReturnType<typeof recordingLogger>['logger']) {
+      const cfg = resolveConfig({ maxRetries: 0, timeoutMs: 2000, logger });
+      const m = await Test.createTestingModule({
+        providers: [
+          HttpClient,
+          { provide: META_SDK_RESOLVED_CONFIG, useValue: cfg },
+          { provide: META_SDK_LOGGER, useValue: logger },
+        ],
+      }).compile();
+      return m.get(HttpClient);
+    }
+
+    it('logs every Graph error with the full Meta payload', async () => {
+      server.use(http.get('https://api.test/x', () =>
+        HttpResponse.json({
+          error: {
+            message: 'Invalid parameter',
+            code: 100,
+            type: 'OAuthException',
+            error_subcode: 2018001,
+            error_user_title: 'Cannot Send Message',
+            error_user_msg: "This person isn't available.",
+            error_data: { blame_field_specs: [['recipient']] },
+            fbtrace_id: 'AbC123',
+          },
+        }, { status: 400 })));
+      const rec = recordingLogger();
+      const c = await buildWith(rec.logger);
+      await c.request({ method: 'GET', url: 'https://api.test/x' });
+
+      const logged = rec.calls.find((l) => l.msg === 'meta_api_error');
+      expect(logged).toBeDefined();
+      expect(logged?.level).toBe('error');
+      expect(logged?.ctx?.['code']).toBe(100);
+      expect(logged?.ctx?.['subcode']).toBe(2018001);
+      expect(logged?.ctx?.['fbTraceId']).toBe('AbC123');
+      expect(logged?.ctx?.['userTitle']).toBe('Cannot Send Message');
+      expect(logged?.ctx?.['userMessage']).toBe("This person isn't available.");
+      expect(logged?.ctx?.['details']).toEqual({ blame_field_specs: [['recipient']] });
+    });
+
+    it('never writes the access token into the log context', async () => {
+      server.use(http.get('https://api.test/x', () =>
+        HttpResponse.json({ error: { message: 'no', code: 1, type: 't', fbtrace_id: 'f' } }, { status: 400 })));
+      const rec = recordingLogger();
+      const c = await buildWith(rec.logger);
+      await c.request({ method: 'GET', url: 'https://api.test/x', query: { access_token: 'SUPERSECRET' } });
+
+      expect(JSON.stringify(rec.calls)).not.toContain('SUPERSECRET');
+      const logged = rec.calls.find((l) => l.msg === 'meta_api_error');
+      expect(logged?.ctx?.['operation']).toBe('GET https://api.test/x');
+    });
+
+    it('logs transient errors at warn rather than error', async () => {
+      server.use(http.get('https://api.test/x', () =>
+        HttpResponse.json({
+          error: { message: 'try again', code: 2, type: 't', is_transient: true, fbtrace_id: 'f' },
+        }, { status: 400 })));
+      const rec = recordingLogger();
+      const c = await buildWith(rec.logger);
+      await c.request({ method: 'GET', url: 'https://api.test/x' });
+
+      const logged = rec.calls.find((l) => l.msg === 'meta_api_error');
+      expect(logged?.level).toBe('warn');
+      expect(logged?.ctx?.['isTransient']).toBe(true);
+    });
+  });
 });

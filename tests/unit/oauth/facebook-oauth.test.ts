@@ -90,6 +90,50 @@ describe('FacebookOAuthClient', () => {
     expect(isOk(await c.subscribePageToWebhooks('p1', 'pt1'))).toBe(true);
   });
 
+  it('unsubscribePageFromWebhooks DELETEs when a subscription exists', async () => {
+    let method = ''; let url = '';
+    server.use(
+      http.get('https://graph.facebook.com/v25.0/p1/subscribed_apps', () =>
+        HttpResponse.json({ data: [{ id: 'app1', subscribed_fields: ['messages'] }] })),
+      http.delete('https://graph.facebook.com/v25.0/p1/subscribed_apps', ({ request }) => {
+        method = request.method; url = request.url;
+        return HttpResponse.json({ success: true });
+      }),
+    );
+    const c = await build();
+    const r = await c.unsubscribePageFromWebhooks('p1', 'pt1');
+    expect(method).toBe('DELETE');
+    expect(url).toContain('access_token=pt1');
+    if (isOk(r)) {
+      expect(r.value.success).toBe(true);
+      expect(r.value.alreadyUnsubscribed).toBe(false);
+    }
+  });
+
+  it('unsubscribePageFromWebhooks skips the DELETE when nothing is subscribed', async () => {
+    let deleted = false;
+    server.use(
+      http.get('https://graph.facebook.com/v25.0/p1/subscribed_apps', () => HttpResponse.json({ data: [] })),
+      http.delete('https://graph.facebook.com/v25.0/p1/subscribed_apps', () => {
+        deleted = true;
+        return HttpResponse.json({ success: true });
+      }),
+    );
+    const c = await build();
+    const r = await c.unsubscribePageFromWebhooks('p1', 'pt1');
+    expect(deleted).toBe(false);
+    if (isOk(r)) expect(r.value.alreadyUnsubscribed).toBe(true);
+  });
+
+  it('unsubscribePageFromWebhooks returns Err when the lookup fails', async () => {
+    server.use(http.get('https://graph.facebook.com/v25.0/p1/subscribed_apps', () =>
+      HttpResponse.json({ error: { message: 'rev', code: 190, type: 'OAuthException', fbtrace_id: 'a' } }, { status: 401 })));
+    const c = await build();
+    const r = await c.unsubscribePageFromWebhooks('p1', 'revoked');
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) expect(r.error).toBeInstanceOf(MetaAuthError);
+  });
+
   it('debugToken returns info', async () => {
     server.use(http.get('https://graph.facebook.com/v25.0/debug_token', () =>
       HttpResponse.json({ data: { app_id: 'cid', is_valid: true, scopes: ['email'], user_id: 'u1' } })));

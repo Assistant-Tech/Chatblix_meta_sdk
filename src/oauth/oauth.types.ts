@@ -41,3 +41,23 @@ export interface InstagramAccount {
   /** IGBA — the IG Graph API account ID. Required for messaging endpoints and webhook entry.id matching. Distinct from `id` (IGSID). */
   userId: string;
 }
+
+/** One entry from a `subscribed_apps` edge. Meta omits fields freely here. */
+export interface SubscribedApp {
+  id?: string;
+  name?: string;
+  category?: string;
+  link?: string;
+  subscribed_fields?: string[];
+}
+
+export interface SubscribedAppsList {
+  data: SubscribedApp[];
+}
+
+/** Outcome of removing an app's webhook subscription. */
+export interface UnsubscribeResult {
+  success: boolean;
+  /** `true` when nothing was subscribed, so no DELETE was issued. */
+  alreadyUnsubscribed: boolean;
+}

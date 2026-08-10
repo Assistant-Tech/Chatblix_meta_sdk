@@ -1,4 +1,4 @@
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.3';
 
 // Module
 export { MetaSdkModule } from './meta-sdk.module';
@@ -42,6 +42,7 @@ export type { FacebookScope, InstagramScope } from './oauth/scopes';
 export type {
   FacebookOAuthOptions, InstagramOAuthOptions,
   BuildAuthUrlInput, ShortLivedToken, LongLivedToken, FacebookPageAccount, InstagramAccount,
+  SubscribedApp, SubscribedAppsList, UnsubscribeResult,
 } from './oauth/oauth.types';
 
 // Messaging

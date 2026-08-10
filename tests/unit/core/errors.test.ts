@@ -27,6 +27,50 @@ describe('MetaError hierarchy', () => {
     const e = new MetaValidationError('bad', [{ path: ['x'], message: 'required' }]);
     expect(e.issues.length).toBe(1);
   });
+  it('MetaApiError surfaces the user-facing and diagnostic fields', () => {
+    const e = new MetaApiError({
+      message: 'Invalid parameter',
+      code: 100,
+      type: 'OAuthException',
+      error_subcode: 2018001,
+      error_user_title: 'Cannot Send Message',
+      error_user_msg: "This person isn't available right now.",
+      error_data: { blame_field_specs: [['recipient']] },
+      is_transient: true,
+      fbtrace_id: 'AbC123',
+    }, 400);
+    expect(e.userTitle).toBe('Cannot Send Message');
+    expect(e.userMessage).toBe("This person isn't available right now.");
+    expect(e.details).toEqual({ blame_field_specs: [['recipient']] });
+    expect(e.isTransient).toBe(true);
+    expect(e.subcode).toBe(2018001);
+    expect(e.fbTraceId).toBe('AbC123');
+  });
+
+  it('appends user-facing text to message without replacing the developer message', () => {
+    const e = new MetaApiError({
+      message: 'Invalid parameter',
+      code: 100,
+      type: 'OAuthException',
+      error_user_title: 'Cannot Send Message',
+      error_user_msg: "This person isn't available.",
+      fbtrace_id: 'x',
+    }, 400);
+    expect(e.message).toBe("Invalid parameter — Cannot Send Message: This person isn't available.");
+  });
+
+  it('leaves message untouched when Meta supplies no user-facing text', () => {
+    const e = new MetaApiError({ message: 'Invalid parameter', code: 100, type: 't', fbtrace_id: 'x' }, 400);
+    expect(e.message).toBe('Invalid parameter');
+    expect(e.userTitle).toBeUndefined();
+    expect(e.isTransient).toBe(false);
+  });
+
+  it('preserves undocumented fields Meta may add later', () => {
+    const e = new MetaApiError({ message: 'm', code: 1, type: 't', fbtrace_id: 'f', some_future_field: 'kept' }, 400);
+    expect(e.graphError['some_future_field']).toBe('kept');
+  });
+
   it('all errors extend MetaError', () => {
     const errs = [
       new MetaApiError({ message: 'm', code: 1, type: 't', fbtrace_id: 'f' }, 400),

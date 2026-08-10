@@ -13,6 +13,7 @@ import {
 } from './oauth.schemas';
 import type {
   FacebookOAuthOptions, BuildAuthUrlInput, ShortLivedToken, LongLivedToken, FacebookPageAccount,
+  SubscribedApp, SubscribedAppsList, UnsubscribeResult,
 } from './oauth.types';
 
 const DebugTokenSchema = z.object({
@@ -147,6 +148,49 @@ export class FacebookOAuthClient {
     });
     if (!r.ok) return r;
     return ok({ success: r.value.success ?? true });
+  }
+
+  /**
+   * Remove this app's webhook subscription from a page.
+   *
+   * Checks for an existing subscription first and no-ops when there is none,
+   * so it is safe to call in a disconnect flow regardless of the page's
+   * current state. Callers get `alreadyUnsubscribed` to distinguish the two.
+   *
+   * Call this BEFORE discarding the page access token — once the token is gone
+   * the subscription can only be cleared by the page owner removing the app.
+   */
+  async unsubscribePageFromWebhooks(
+    pageId: string,
+    pageAccessToken: string,
+  ): Promise<Result<UnsubscribeResult, MetaError>> {
+    const listed = await this.getSubscribedApps(pageId, pageAccessToken);
+    if (!listed.ok) return listed;
+    if (listed.value.data.length === 0) {
+      return ok({ success: true, alreadyUnsubscribed: true });
+    }
+
+    const r = await this.http.request<{ success?: boolean }>({
+      method: 'DELETE',
+      url: `${this.base}/${pageId}/subscribed_apps`,
+      query: { access_token: pageAccessToken },
+    });
+    if (!r.ok) return r;
+    return ok({ success: r.value.success ?? true, alreadyUnsubscribed: false });
+  }
+
+  /** List the apps currently subscribed to this page's webhooks. */
+  async getSubscribedApps(
+    pageId: string,
+    pageAccessToken: string,
+  ): Promise<Result<SubscribedAppsList, MetaError>> {
+    const r = await this.http.request<{ data?: SubscribedApp[] }>({
+      method: 'GET',
+      url: `${this.base}/${pageId}/subscribed_apps`,
+      query: { access_token: pageAccessToken },
+    });
+    if (!r.ok) return r;
+    return ok({ data: r.value.data ?? [] });
   }
 
   async debugToken(token: string): Promise<Result<DebugTokenResult, MetaError>> {
