@@ -69,6 +69,18 @@ describe('FacebookOAuthClient', () => {
     expect(url).toContain('fb_exchange_token=short');
   });
 
+  it('exchangeForLongLivedToken accepts a never-expiring token with no expires_in', async () => {
+    server.use(http.get('https://graph.facebook.com/v25.0/oauth/access_token', () =>
+      HttpResponse.json({ access_token: 'long', token_type: 'bearer' })));
+    const c = await build();
+    const r = await c.exchangeForLongLivedToken('short');
+    expect(isOk(r)).toBe(true);
+    if (isOk(r)) {
+      expect(r.value.accessToken).toBe('long');
+      expect(r.value.expiresIn).toBeUndefined();
+    }
+  });
+
   it('listPages returns pages with optional Instagram', async () => {
     server.use(http.get('https://graph.facebook.com/v25.0/me/accounts', () =>
       HttpResponse.json({ data: [

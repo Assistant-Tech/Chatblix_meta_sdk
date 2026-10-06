@@ -27,6 +27,12 @@ export interface LongLivedToken {
   tokenType: string;
   expiresIn: number;
 }
+/** `expiresIn` is absent when Facebook issued a token that never expires. */
+export interface FacebookLongLivedToken {
+  accessToken: string;
+  tokenType: string;
+  expiresIn?: number;
+}
 export interface FacebookPageAccount {
   id: string;
   name: string;

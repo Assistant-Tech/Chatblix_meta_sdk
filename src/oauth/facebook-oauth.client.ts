@@ -9,10 +9,10 @@ import { META_GRAPH_API_BASE, FACEBOOK_OAUTH_DIALOG } from '../core/constants';
 import { FACEBOOK_OAUTH_OPTIONS, META_SDK_RESOLVED_CONFIG } from '../meta-sdk.constants';
 import { FACEBOOK_SCOPES } from './scopes';
 import {
-  ShortLivedTokenSchema, LongLivedTokenSchema, FacebookPageAccountsResponseSchema,
+  ShortLivedTokenSchema, FacebookLongLivedTokenSchema, FacebookPageAccountsResponseSchema,
 } from './oauth.schemas';
 import type {
-  FacebookOAuthOptions, BuildAuthUrlInput, ShortLivedToken, LongLivedToken, FacebookPageAccount,
+  FacebookOAuthOptions, BuildAuthUrlInput, ShortLivedToken, FacebookLongLivedToken, FacebookPageAccount,
   SubscribedApp, SubscribedAppsList, UnsubscribeResult,
 } from './oauth.types';
 
@@ -82,7 +82,7 @@ export class FacebookOAuthClient {
     });
   }
 
-  async exchangeForLongLivedToken(shortLivedToken: string): Promise<Result<LongLivedToken, MetaError>> {
+  async exchangeForLongLivedToken(shortLivedToken: string): Promise<Result<FacebookLongLivedToken, MetaError>> {
     const r = await this.http.request<unknown>({
       method: 'GET',
       url: `${this.base}/oauth/access_token`,
@@ -94,11 +94,11 @@ export class FacebookOAuthClient {
       },
     });
     if (!r.ok) return r;
-    return parseSchema(LongLivedTokenSchema, r.value, (raw) => ({
-      accessToken: raw.access_token,
-      tokenType: raw.token_type,
-      expiresIn: raw.expires_in,
-    }));
+    return parseSchema(FacebookLongLivedTokenSchema, r.value, (raw) => {
+      const out: FacebookLongLivedToken = { accessToken: raw.access_token, tokenType: raw.token_type };
+      if (raw.expires_in !== undefined) out.expiresIn = raw.expires_in;
+      return out;
+    });
   }
 
   async listPages(userAccessToken: string): Promise<Result<FacebookPageAccount[], MetaError>> {

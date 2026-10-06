@@ -10,6 +10,13 @@ export const LongLivedTokenSchema = z.object({
   token_type: z.string(),
   expires_in: z.number().int(),
 });
+// Facebook omits `expires_in` when the exchanged token never expires (seen for
+// users with a role on the app), so it cannot be required as it is for Instagram.
+export const FacebookLongLivedTokenSchema = z.object({
+  access_token: z.string().min(1),
+  token_type: z.string().default('bearer'),
+  expires_in: z.number().int().optional(),
+});
 export const FacebookPageAccountsResponseSchema = z.object({
   data: z.array(z.object({
     id: z.string(), name: z.string(), access_token: z.string(),

@@ -41,7 +41,7 @@ export { FACEBOOK_SCOPES, INSTAGRAM_SCOPES } from './oauth/scopes';
 export type { FacebookScope, InstagramScope } from './oauth/scopes';
 export type {
   FacebookOAuthOptions, InstagramOAuthOptions,
-  BuildAuthUrlInput, ShortLivedToken, LongLivedToken, FacebookPageAccount, InstagramAccount,
+  BuildAuthUrlInput, ShortLivedToken, LongLivedToken, FacebookLongLivedToken, FacebookPageAccount, InstagramAccount,
   SubscribedApp, SubscribedAppsList, UnsubscribeResult,
 } from './oauth/oauth.types';
 
